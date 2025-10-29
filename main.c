@@ -110,7 +110,6 @@ struct rte_mempool * l2fwd_pktmbuf_pool = NULL;
 
 /* Per-port statistics struct */
 struct __rte_cache_aligned l2fwd_port_statistics {
-        // --- FIXED: Use atomic types for thread-safe access ---
         rte_atomic64_t tx;
         rte_atomic64_t rx;
         rte_atomic64_t dropped;
@@ -149,7 +148,6 @@ print_stats(void)
                            "\nPackets received: %20"PRIu64
                            "\nPackets dropped: %21"PRIu64,
                            portid,
-                           // --- FIXED: Use atomic reads for stats ---
                            rte_atomic64_read(&port_statistics[portid].tx),
                            rte_atomic64_read(&port_statistics[portid].rx),
                            rte_atomic64_read(&port_statistics[portid].dropped));
@@ -224,12 +222,10 @@ l2fwd_main_loop_latency(void)
                         // Send the entire burst immediately
                         nb_tx = rte_eth_tx_burst(l2fwd_dst_ports[portid], queueid, pkts_burst, nb_rx);
 
-                        // --- FIXED: Use atomic add for stats ---
                         rte_atomic64_add(&port_statistics[l2fwd_dst_ports[portid]].tx, nb_tx);
 
                         // Free any packets that were not sent
                         if (unlikely(nb_tx < nb_rx)) {
-                                // --- FIXED: Use atomic add for stats ---
                                 rte_atomic64_add(&port_statistics[l2fwd_dst_ports[portid]].dropped, (nb_rx - nb_tx));
                                 for (j = nb_tx; j < nb_rx; j++) {
                                         rte_pktmbuf_free(pkts_burst[j]);
@@ -326,7 +322,6 @@ l2fwd_main_loop_throughput(void)
                                 buffer = tx_buffer[portid][queueid];
                                 sent = rte_eth_tx_buffer_flush(portid, queueid, buffer);
                                 if (sent)
-                                        // --- FIXED: Use atomic add for stats ---
                                         rte_atomic64_add(&port_statistics[portid].tx, sent);
                         }
                         prev_tsc = cur_tsc;
@@ -340,7 +335,6 @@ l2fwd_main_loop_throughput(void)
                         if (unlikely(nb_rx == 0))
                                 continue;
 
-                        // --- FIXED: Use atomic add for stats ---
                         rte_atomic64_add(&port_statistics[portid].rx, nb_rx);
 
                         for (j = 0; j < nb_rx; j++) {
