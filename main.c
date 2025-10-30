@@ -352,8 +352,8 @@ static int
 l2fwd_launch_one_lcore(__rte_unused void *dummy)
 {
         if (latency_optimized) {
-                //l2fwd_main_loop_latency();
-                l2fwd_main_loop_one_by_one();
+                l2fwd_main_loop_latency();
+                // l2fwd_main_loop_one_by_one();
         } else {
                 l2fwd_main_loop_throughput();
         }
