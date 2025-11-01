@@ -926,5 +926,3 @@ main(int argc, char **argv)
 
 	return ret;
 }
-
-Can you remove the atomic counters from this code, please? But keep the struct.
