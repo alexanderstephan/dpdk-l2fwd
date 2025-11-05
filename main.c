@@ -643,6 +643,7 @@ main(int argc, char **argv)
 	unsigned nb_ports_in_mask = 0;
 	unsigned int nb_mbufs;
 	unsigned int queues_per_port[RTE_MAX_ETHPORTS] = {0};
+	struct rte_mempool *worker_mempools[RTE_MAX_LCORE] = {NULL};
 
 	ret = rte_eal_init(argc, argv);
 	if (ret < 0) rte_exit(EXIT_FAILURE, "Invalid EAL arguments\n");
@@ -793,11 +794,11 @@ main(int argc, char **argv)
 	}
 
 	/* [port_id][queue_id] -> lcore_id */
-    uint16_t lcore_for_queue[RTE_MAX_ETHPORTS][MAX_RX_QUEUE_PER_PORT];
+    uint16_t lcore_for_queue[RTE_MAX_ETHPORTS][MAX_TX_QUEUE_PER_PORT];
     
     // Initialize with an invalid lcore id
     for (portid = 0; portid < RTE_MAX_ETHPORTS; portid++) {
-        for (unsigned q = 0; q < MAX_RX_QUEUE_PER_PORT; q++) {
+        for (unsigned q = 0; q < MAX_TX_QUEUE_PER_PORT; q++) {
             lcore_for_queue[portid][q] = RTE_MAX_LCORE;
         }
     }
