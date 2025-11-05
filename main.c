@@ -754,7 +754,14 @@ main(int argc, char **argv)
 		if (nb_workers % 2 != 0) {
 			queues_port0++;
 		}
-
+		
+		// Force 2 queues per port for 2 workers to avoid RX/TX lock contention.
+        if (nb_workers == 2) {
+            printf("INFO: 2 workers detected. Forcing 2 queues/port to avoid contention.\n");
+            queues_port0 = 2;
+            queues_port1 = 2;
+        }
+		
 		// Ensure at least one queue per port if there are any workers at all.
 		if (nb_workers > 0 && queues_port0 == 0) queues_port0 = 1;
 		if (nb_workers > 0 && queues_port1 == 0) queues_port1 = 1;
