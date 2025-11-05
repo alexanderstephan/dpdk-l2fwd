@@ -792,11 +792,34 @@ main(int argc, char **argv)
 		}
 	}
 
+	/* [port_id][queue_id] -> lcore_id */
+    uint16_t lcore_for_queue[RTE_MAX_ETHPORTS][MAX_RX_QUEUE_PER_PORT];
+    
+    // Initialize with an invalid lcore id
+    for (portid = 0; portid < RTE_MAX_ETHPORTS; portid++) {
+        for (unsigned q = 0; q < MAX_RX_QUEUE_PER_PORT; q++) {
+            lcore_for_queue[portid][q] = RTE_MAX_LCORE;
+        }
+    }
 
-	nb_mbufs = RTE_MAX(nb_ports_in_mask * (nb_rxd + nb_txd + MAX_PKT_BURST) +
-			       (nb_lcores * MEMPOOL_CACHE_SIZE) + 32768U, 8192U);
-	l2fwd_pktmbuf_pool = rte_pktmbuf_pool_create("mbuf_pool", nb_mbufs, MEMPOOL_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
-	if (l2fwd_pktmbuf_pool == NULL) rte_exit(EXIT_FAILURE, "Cannot init mbuf pool\n");
+    // Handle the 1-core case (main lcore)
+    lcore_id = rte_get_main_lcore();
+    qconf = &lcore_queue_conf[lcore_id];
+    for (unsigned i = 0; i < qconf->n_rx_queue; i++) {
+        uint16_t p = qconf->rx_queue_list[i].port_id;
+        uint16_t q = qconf->rx_queue_list[i].queue_id;
+        lcore_for_queue[p][q] = lcore_id;
+    }
+
+    // Handle the N-worker case
+    RTE_LCORE_FOREACH_WORKER(lcore_id) {
+        qconf = &lcore_queue_conf[lcore_id];
+        for (unsigned i = 0; i < qconf->n_rx_queue; i++) {
+            uint16_t p = qconf->rx_queue_list[i].port_id;
+            uint16_t q = qconf->rx_queue_list[i].queue_id;
+            lcore_for_queue[p][q] = lcore_id;
+        }
+    }
 
 	RTE_ETH_FOREACH_DEV(portid) {
 		struct rte_eth_rxconf rxq_conf;
@@ -836,8 +859,37 @@ main(int argc, char **argv)
 		rxq_conf = dev_info.default_rxconf;
 		rxq_conf.offloads = local_port_conf.rxmode.offloads;
 		for (q = 0; q < queues_per_port[portid]; q++) {
-			ret = rte_eth_rx_queue_setup(portid, q, nb_rxd, rte_eth_dev_socket_id(portid), &rxq_conf, l2fwd_pktmbuf_pool);
-			if (ret < 0) rte_exit(EXIT_FAILURE, "rte_eth_rx_queue_setup:err=%d, port=%u, queue=%u\n", ret, portid, q);
+			// 1. Find the lcore assigned to this queue from our map
+            uint16_t target_lcore = lcore_for_queue[portid][q];
+            if (target_lcore == RTE_MAX_LCORE) {
+                rte_exit(EXIT_FAILURE, "Error: No lcore found for port %u queue %u\n", portid, q);
+            }
+
+            struct rte_mempool *local_pool = worker_mempools[target_lcore];
+
+            // 2. If we haven't created a pool for this lcore yet, create one.
+            if (local_pool == NULL) {
+                printf("INFO: Creating mbuf pool for lcore %u\n", target_lcore);
+                char pool_name[32];
+                snprintf(pool_name, sizeof(pool_name), "mbuf_pool_lcore%u", target_lcore);
+
+                unsigned int nb_mbufs_per_core = 32768U;
+                
+                local_pool = rte_pktmbuf_pool_create(pool_name,
+                                        nb_mbufs_per_core, MEMPOOL_CACHE_SIZE, 0,
+                                        RTE_MBUF_DEFAULT_BUF_SIZE, 0); 
+                if (local_pool == NULL) {
+                    rte_exit(EXIT_FAILURE, "Cannot init mbuf pool for lcore %u\n", target_lcore);
+                }
+                worker_mempools[target_lcore] = local_pool;
+            }
+
+            // 3. Setup the queue using its lcore's dedicated mempool
+            ret = rte_eth_rx_queue_setup(portid, q, nb_rxd, 
+                                         rte_eth_dev_socket_id(portid), 
+                                         &rxq_conf, local_pool);
+            if (ret < 0) 
+                rte_exit(EXIT_FAILURE, "rte_eth_rx_queue_setup:err=%d, port=%u, queue=%u\n", ret, portid, q);
 		}
 
 		txq_conf = dev_info.default_txconf;
