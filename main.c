@@ -755,9 +755,11 @@ main(int argc, char **argv)
 			queues_port0++;
 		}
 		
-		// Force 2 queues per port for 2 workers to avoid RX/TX lock contention.
-        if (nb_workers == 2) {
-            printf("INFO: 2 workers detected. Forcing 2 queues/port to avoid contention.\n");
+		// Force 2 queues per port for 2 workers *ONLY* in latency-opt mode
+        // to avoid the RX/TX queue contention bug.
+        // Throughput mode's logic requires the simpler 1-queue-per-port assignment.
+		if (nb_workers == 2 && latency_optimized) {
+			printf("INFO: 2 workers in latency-opt mode. Forcing 2 queues/port to avoid contention.\n");
             queues_port0 = 2;
             queues_port1 = 2;
         }
