@@ -754,16 +754,15 @@ main(int argc, char **argv)
 		if (nb_workers % 2 != 0) {
 			queues_port0++;
 		}
-		
-		// Force 2 queues per port for 2 workers *ONLY* in latency-opt mode
-        // to avoid the RX/TX queue contention bug.
-        // Throughput mode's logic requires the simpler 1-queue-per-port assignment.
-		if (nb_workers == 2 && latency_optimized) {
-			printf("INFO: 2 workers in latency-opt mode. Forcing 2 queues/port to avoid contention.\n");
-            queues_port0 = 2;
-            queues_port1 = 2;
+	    const unsigned int queue_offset = 2;
+
+		// Reduce the queue contention, so it does not become a bottleneck.
+		// This should be solved architecturally, but is good enough for now.
+        if (nb_workers > 1) {
+            queues_port0 += queue_offset;
+            queues_port1 += queue_offset;
         }
-		
+
 		// Ensure at least one queue per port if there are any workers at all.
 		if (nb_workers > 0 && queues_port0 == 0) queues_port0 = 1;
 		if (nb_workers > 0 && queues_port1 == 0) queues_port1 = 1;
