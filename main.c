@@ -746,19 +746,25 @@ main(int argc, char **argv)
 
 		printf("INFO: Using manager/worker model with %u worker lcores.\n", nb_workers);
 
-		/* Determine per-port queue count as before (fallback to at least 1
-		   Reduce the queue contention, so it does not become a bottleneck.
-		   This should be solved architecturally, but is good enough for now.
-		*/
-		unsigned int queues_port0 = nb_workers;
-		unsigned int queues_port1 = nb_workers;
+		/* Determine per-port queue count as before (fallback to at least 1) */
+		unsigned int queues_port0 = nb_workers / 2;
+		unsigned int queues_port1 = nb_workers / 2;
 
-		/* If there's an odd number of workers, give the extra one to the first port. */
+		// If there's an odd number of workers, give the extra one to the first port.
 		if (nb_workers % 2 != 0) {
 			queues_port0++;
 		}
-		
-		/* Ensure at least one queue per port if there are any workers at all. */
+                // Determined through testing for now, sub-linear scale-up, now bottlenecked by cache contention.
+	        const unsigned int queue_offset = 6;
+
+		// Reduce the queue contention, so it does not become a bottleneck.
+		// This should be solved architecturally, but is good enough for now.
+                if (nb_workers > 1) {
+                        queues_port0 += queue_offset;
+                        queues_port1 += queue_offset;
+                }
+
+		// Ensure at least one queue per port if there are any workers at all.
 		if (nb_workers > 0 && queues_port0 == 0) queues_port0 = 1;
 		if (nb_workers > 0 && queues_port1 == 0) queues_port1 = 1;
 
